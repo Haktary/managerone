@@ -1,36 +1,76 @@
 <?php
-require_once 'src/db.php';
-require_once 'src/UserController.php';
-require_once 'src/TaskController.php';
-
-$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$method = $_SERVER['REQUEST_METHOD'];
-
 header('Content-Type: application/json');
 
-if (preg_match('#^/user/(\d+)$#', $uri, $matches)) {
-    $userId = (int)$matches[1];
+require_once __DIR__ . '/src/Controllers/UserController.php';
+require_once __DIR__ . '/src/Controllers/TaskController.php';
 
-    if ($method === 'GET') {
-        getUser($userId);
-    }
-} elseif (preg_match('#^/user/(\d+)/tasks$#', $uri, $matches)) {
-    $userId = (int)$matches[1];
+$uri = explode('/', trim($_SERVER['REQUEST_URI'], '/'));
+$method = $_SERVER['REQUEST_METHOD'];
 
-    if ($method === 'GET') {
-        getTasksByUser($userId);
-    } elseif ($method === 'POST') {
-        createTaskForUser($userId);
-    }
-} elseif (preg_match('#^/task/(\d+)$#', $uri, $matches)) {
-    $taskId = (int)$matches[1];
+try {
+    switch ($uri[0] ?? '') {
 
-    if ($method === 'GET') {
-        getTask($taskId);
-    } elseif ($method === 'DELETE') {
-        deleteTask($taskId);
+        case 'user':
+            if (!isset($uri[1]) || !is_numeric($uri[1])) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Invalid or missing user ID']);
+                break;
+            }
+
+            $userId = (int)$uri[1];
+
+            switch ($uri[2] ?? '') {
+                case '':
+                    if ($method === 'GET') {
+                        UserController::getUser($userId);
+                    } else {
+                        http_response_code(405);
+                        echo json_encode(['error' => 'Method not allowed']);
+                    }
+                    break;
+
+                case 'tasks':
+                    if ($method === 'GET') {
+                        TaskController::getTasksByUser($userId);
+                    } elseif ($method === 'POST') {
+                        TaskController::createTaskForUser($userId);
+                    } else {
+                        http_response_code(405);
+                        echo json_encode(['error' => 'Method not allowed']);
+                    }
+                    break;
+
+                default:
+                    http_response_code(404);
+                    echo json_encode(['error' => 'Invalid user route']);
+            }
+            break;
+
+        case 'task':
+            if (!isset($uri[1]) || !is_numeric($uri[1])) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Invalid or missing task ID']);
+                break;
+            }
+
+            $taskId = (int)$uri[1];
+
+            if ($method === 'GET') {
+                TaskController::getTask($taskId);
+            } elseif ($method === 'DELETE') {
+                TaskController::deleteTask($taskId);
+            } else {
+                http_response_code(405);
+                echo json_encode(['error' => 'Method not allowed']);
+            }
+            break;
+
+        default:
+            http_response_code(404);
+            echo json_encode(['error' => 'Route not found']);
     }
-} else {
-    http_response_code(404);
-    echo json_encode(['error' => 'Route not found']);
+
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode(['error' => $e->getMessage()]);
 }
